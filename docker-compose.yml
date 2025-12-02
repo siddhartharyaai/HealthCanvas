@@ -1,0 +1,92 @@
+# ============================================
+# HealthCanvas - Docker Compose
+# Full Stack Deployment Configuration
+# ============================================
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: healthcanvas-db
+    environment:
+      POSTGRES_DB: healthcanvas
+      POSTGRES_USER: healthcanvas
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-healthcanvas_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthcanvas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - healthcanvas-network
+
+  # FastAPI Backend
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: healthcanvas-api
+    environment:
+      DATABASE_URL: postgresql://healthcanvas:${DB_PASSWORD:-healthcanvas_dev_password}@postgres:5432/healthcanvas
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production-please}
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/api:/app
+      - upload_data:/app/uploads
+    networks:
+      - healthcanvas-network
+    restart: unless-stopped
+
+  # React Frontend (Development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: healthcanvas-frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - healthcanvas-network
+
+  # pgAdmin (Optional - Database Management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: healthcanvas-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@healthcanvas.local
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - healthcanvas-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  upload_data:
+
+networks:
+  healthcanvas-network:
+    driver: bridge
