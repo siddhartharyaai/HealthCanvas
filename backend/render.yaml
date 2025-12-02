@@ -1,0 +1,23 @@
+# ============================================
+# HealthCanvas - Render Deployment Config
+# ============================================
+
+services:
+  - type: web
+    name: healthcanvas-api
+    env: python
+    region: singapore  # Closest to your Neon DB
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Set manually in Render dashboard
+      - key: GEMINI_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: CORS_ORIGINS
+        value: https://healthcanvas.netlify.app,http://localhost:3000
+      - key: PYTHON_VERSION
+        value: "3.11"
